@@ -151,6 +151,7 @@ script:
 |---------|----------|
 | Device not discovered | Ensure Apple TV and Home Assistant are on the same network; try manual IP entry |
 | Pairing fails | Add the integration again and enter each PIN promptly; if the Apple TV later rejects the credentials, Home Assistant asks you to pair it again |
+| New release not shown as update | HACS checks custom repositories only every 48 hours. In HACS open **Apple TV Control**, then ⋮ → **Update information**; the update then appears in HACS and under **Settings** → **Updates** |
 | Entities show unavailable | Check that the Apple TV is powered on and reachable; check Home Assistant logs for connection errors |
 | Commands not working | Verify the entity is available (not unavailable); check logs for pyatv errors |
 
