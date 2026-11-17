@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 180" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <style>
+      .box { rx: 8; ry: 8; }
+      .node { fill: #ffffff; stroke: #333; stroke-width: 1.5; }
+      .success { fill: #d4edda; stroke: #28a745; stroke-width: 2; }
+      .label { font-size: 13px; fill: #333; font-weight: 600; text-anchor: middle; }
+      .sublabel { font-size: 11px; fill: #666; text-anchor: middle; }
+      .arrow { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="180" fill="#fafafa"/>
+
+  <!-- User initiates -->
+  <rect x="20" y="50" width="150" height="80" class="box node"/>
+  <text x="95" y="85" class="label">User initiates</text>
+  <text x="95" y="102" class="sublabel">setup</text>
+
+  <line x1="170" y1="90" x2="230" y2="90" class="arrow"/>
+
+  <!-- Device Selection -->
+  <rect x="230" y="50" width="150" height="80" class="box node"/>
+  <text x="305" y="85" class="label">Device Selection</text>
+  <text x="305" y="102" class="sublabel">(discovery)</text>
+
+  <line x1="380" y1="90" x2="440" y2="90" class="arrow"/>
+
+  <!-- Pairing -->
+  <rect x="440" y="50" width="150" height="80" class="box node"/>
+  <text x="515" y="85" class="label">Pairing</text>
+  <text x="515" y="102" class="sublabel">(if needed)</text>
+
+  <line x1="590" y1="90" x2="650" y2="90" class="arrow"/>
+
+  <!-- Create Entry (success) -->
+  <rect x="650" y="50" width="150" height="80" class="box success"/>
+  <text x="725" y="85" class="label">Create Entry</text>
+  <text x="725" y="102" class="sublabel">(store creds)</text>
+</svg>

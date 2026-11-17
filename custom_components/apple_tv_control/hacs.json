@@ -1,0 +1,8 @@
+{
+  "name": "Apple TV Control",
+  "version": "0.1.0",
+  "homeassistant": "2024.1.0",
+  "render_readme": true,
+  "country": [],
+  "content_in_root": false
+}

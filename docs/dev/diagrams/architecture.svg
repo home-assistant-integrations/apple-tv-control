@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <style>
+      .box { rx: 8; ry: 8; }
+      .ha-bg { fill: #f0f4ff; stroke: #4a6cf7; stroke-width: 2; }
+      .pyatv-bg { fill: #fff8f0; stroke: #f59e0b; stroke-width: 2; }
+      .atv-bg { fill: #f0fff4; stroke: #22c55e; stroke-width: 2; }
+      .component { fill: #ffffff; stroke: #333; stroke-width: 1.5; }
+      .label { font-size: 13px; fill: #333; font-weight: 600; }
+      .sublabel { font-size: 11px; fill: #666; }
+      .title { font-size: 14px; fill: #333; font-weight: 700; }
+      .arrow { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="480" fill="#fafafa"/>
+
+  <!-- Home Assistant subgraph -->
+  <rect x="30" y="30" width="520" height="300" class="box ha-bg"/>
+  <text x="50" y="55" class="title">Home Assistant</text>
+
+  <!-- HA components -->
+  <rect x="60" y="80" width="130" height="60" class="box component"/>
+  <text x="125" y="108" class="label" text-anchor="middle">Config Flow</text>
+  <text x="125" y="124" class="sublabel" text-anchor="middle">setup &amp; pairing</text>
+
+  <rect x="220" y="80" width="130" height="60" class="box component"/>
+  <text x="285" y="108" class="label" text-anchor="middle">Coordinator</text>
+  <text x="285" y="124" class="sublabel" text-anchor="middle">connection manager</text>
+
+  <rect x="380" y="80" width="130" height="60" class="box component"/>
+  <text x="445" y="108" class="label" text-anchor="middle">Media Player</text>
+  <text x="445" y="124" class="sublabel" text-anchor="middle">entity (controls)</text>
+
+  <rect x="60" y="180" width="130" height="60" class="box component"/>
+  <text x="125" y="208" class="label" text-anchor="middle">Device Discovery</text>
+  <text x="125" y="224" class="sublabel" text-anchor="middle">(scan)</text>
+
+  <rect x="220" y="180" width="130" height="60" class="box component"/>
+  <text x="285" y="208" class="label" text-anchor="middle">pyatv Connection</text>
+  <text x="285" y="224" class="sublabel" text-anchor="middle">lifecycle</text>
+
+  <rect x="380" y="180" width="130" height="60" class="box component"/>
+  <text x="445" y="208" class="label" text-anchor="middle">Button Entities</text>
+  <text x="445" y="224" class="sublabel" text-anchor="middle">long-press actions</text>
+
+  <!-- HA internal arrows -->
+  <line x1="125" y1="140" x2="125" y2="180" class="arrow"/>
+  <line x1="285" y1="140" x2="285" y2="180" class="arrow"/>
+  <line x1="445" y1="140" x2="445" y2="180" class="arrow"/>
+
+  <!-- pyatv subgraph -->
+  <rect x="30" y="360" width="520" height="90" class="box pyatv-bg"/>
+  <text x="50" y="385" class="title">pyatv Library</text>
+
+  <rect x="60" y="395" width="130" height="40" class="box component"/>
+  <text x="125" y="421" class="label" text-anchor="middle">scan / pair / connect</text>
+
+  <rect x="220" y="395" width="130" height="40" class="box component"/>
+  <text x="285" y="421" class="label" text-anchor="middle">RemoteControl</text>
+
+  <rect x="380" y="395" width="130" height="40" class="box component"/>
+  <text x="445" y="421" class="label" text-anchor="middle">Power</text>
+
+  <!-- HA to pyatv arrows -->
+  <line x1="125" y1="240" x2="125" y2="360" class="arrow"/>
+  <line x1="285" y1="240" x2="285" y2="360" class="arrow"/>
+
+  <!-- pyatv internal arrows -->
+  <line x1="190" y1="415" x2="220" y2="415" class="arrow"/>
+  <line x1="350" y1="415" x2="380" y2="415" class="arrow"/>
+
+  <!-- Apple TV Device -->
+  <rect x="620" y="180" width="220" height="100" class="box atv-bg"/>
+  <text x="730" y="220" class="label" text-anchor="middle">Apple TV Device</text>
+  <text x="730" y="240" class="sublabel" text-anchor="middle">(tvOS)</text>
+
+  <!-- pyatv to Apple TV arrows -->
+  <line x1="350" y1="415" x2="620" y2="230" class="arrow"/>
+  <line x1="510" y1="415" x2="620" y2="230" class="arrow"/>
+</svg>

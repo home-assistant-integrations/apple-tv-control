@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 300" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <style>
+      .box { rx: 8; ry: 8; }
+      .manual { fill: #fff3cd; stroke: #ffc107; stroke-width: 2; }
+      .integration { fill: #d1ecf1; stroke: #17a2b8; stroke-width: 2; }
+      .unit { fill: #d4edda; stroke: #28a745; stroke-width: 2; }
+      .label { font-size: 14px; fill: #333; font-weight: 600; text-anchor: middle; }
+      .sublabel { font-size: 11px; fill: #555; text-anchor: middle; }
+      .arrow { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+
+  <rect width="500" height="300" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="250" y="30" font-size="16" fill="#333" font-weight="700" text-anchor="middle">Test Pyramid</text>
+
+  <!-- Manual E2E (top, narrowest) -->
+  <rect x="150" y="50" width="200" height="60" class="box manual"/>
+  <text x="250" y="78" class="label">Manual E2E</text>
+  <text x="250" y="95" class="sublabel">Real Apple TV, HACS install</text>
+
+  <line x1="250" y1="110" x2="250" y2="140" class="arrow"/>
+
+  <!-- Integration (middle) -->
+  <rect x="100" y="140" width="300" height="60" class="box integration"/>
+  <text x="250" y="168" class="label">Integration Tests</text>
+  <text x="250" y="185" class="sublabel">Mock Home Assistant + mock pyatv</text>
+
+  <line x1="250" y1="200" x2="250" y2="230" class="arrow"/>
+
+  <!-- Unit Tests (bottom, widest) -->
+  <rect x="50" y="230" width="400" height="60" class="box unit"/>
+  <text x="250" y="258" class="label">Unit Tests</text>
+  <text x="250" y="275" class="sublabel">Mock everything, test logic in isolation</text>
+</svg>
