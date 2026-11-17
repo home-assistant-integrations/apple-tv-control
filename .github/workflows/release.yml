@@ -1,0 +1,162 @@
+name: Release
+
+# Started manually: Actions → Release → Run workflow.
+# Releases the head of the branch the workflow is started on (normally main).
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: only calculate the version and release notes, push and release nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Two releases running at the same time would calculate the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MANIFEST: custom_components/apple_tv_control/manifest.json
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Calculate next version
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Scheme yyyy.mm.rm (CalVer, month without zero padding, e.g. 2027.1.0).
+          # rm counts the releases of the month: starts at 0, resets when the month changes.
+          # The month is taken in UTC.
+          now=$(date -u +%Y.%-m)
+          year=${now%.*}
+          month=${now#*.}
+
+          # Highest existing release. Drafts and pre-releases count too, so their numbers are never reused.
+          tags=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')
+          latest=$(grep -E '^[0-9]{4}\.[0-9]{1,2}\.[0-9]+$' <<< "$tags" | sort -V | tail -n 1 || true)
+
+          rm=0
+          if [[ -n "$latest" ]]; then
+            IFS=. read -r latest_year latest_month latest_rm <<< "$latest"
+            if (( 10#$latest_year == year && 10#$latest_month == month )); then
+              rm=$(( 10#$latest_rm + 1 ))
+            fi
+          fi
+          version="$year.$month.$rm"
+
+          if [[ -n "$latest" && "$(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]]; then
+            echo "::error::Next version $version is not newer than the latest release $latest"
+            exit 1
+          fi
+
+          echo "Latest release: ${latest:-none} -> next version: $version"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check that branch and tag are free
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "rel-$VERSION" > /dev/null; then
+            echo "::error::Branch rel-$VERSION already exists"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "$VERSION" > /dev/null; then
+            echo "::error::Tag $VERSION already exists"
+            exit 1
+          fi
+
+      - name: Create release branch and set manifest version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git switch -c "rel-$VERSION"
+
+          # Keep manifest.json's version in sync with the release tag (HACS shows the tag, Home Assistant the manifest)
+          sed -i -E "s/^([[:space:]]*\"version\":[[:space:]]*\")[^\"]*\"/\1$VERSION\"/" "$MANIFEST"
+          jq -e --arg v "$VERSION" '.version == $v' "$MANIFEST" > /dev/null
+
+          if git diff --quiet; then
+            echo "$MANIFEST is already at $VERSION"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): $VERSION"
+          fi
+
+      - name: Build release notes
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Use the "## [<version>]" section of CHANGELOG.md if there is one,
+          # otherwise GitHub generates the notes from the changes since the last release.
+          notes="$RUNNER_TEMP/release-notes.md"
+          : > "$notes"
+          if [[ -f CHANGELOG.md ]]; then
+            awk -v header="## [$VERSION]" '
+              index($0, header) == 1 { found = 1; next }
+              found && (/^## \[/ || /^\[.*\]: /) { exit }
+              found { print }
+            ' CHANGELOG.md > "$notes"
+          fi
+
+          if grep -q '[^[:space:]]' "$notes"; then
+            echo "source=CHANGELOG.md" >> "$GITHUB_OUTPUT"
+            cat "$notes"
+          else
+            echo "source=generated" >> "$GITHUB_OUTPUT"
+            echo "CHANGELOG.md has no section for $VERSION, GitHub will generate the release notes"
+          fi
+          echo "file=$notes" >> "$GITHUB_OUTPUT"
+
+      - name: Push release branch
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git push origin "rel-$VERSION"
+
+      - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
+        run: |
+          set -euo pipefail
+          if [[ "$NOTES_SOURCE" == "CHANGELOG.md" ]]; then
+            notes=(--notes-file "$NOTES_FILE")
+          else
+            notes=(--generate-notes)
+          fi
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --target "rel-$VERSION" --title "$VERSION" "${notes[@]}"
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          LATEST: ${{ steps.version.outputs.latest }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "### Release $VERSION"
+            echo "- Previous release: ${LATEST:-none}"
+            echo "- Branch: \`rel-$VERSION\`"
+            echo "- Release notes: $NOTES_SOURCE"
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "- **Dry run:** nothing was pushed or released"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
