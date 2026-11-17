@@ -25,6 +25,41 @@ class AppleTvButtonDescription(ButtonEntityDescription):
 
 BUTTONS = (
     AppleTvButtonDescription(
+        key="up",
+        translation_key="up",
+        press_fn=lambda atv: atv.remote_control.up(),
+    ),
+    AppleTvButtonDescription(
+        key="down",
+        translation_key="down",
+        press_fn=lambda atv: atv.remote_control.down(),
+    ),
+    AppleTvButtonDescription(
+        key="left",
+        translation_key="left",
+        press_fn=lambda atv: atv.remote_control.left(),
+    ),
+    AppleTvButtonDescription(
+        key="right",
+        translation_key="right",
+        press_fn=lambda atv: atv.remote_control.right(),
+    ),
+    AppleTvButtonDescription(
+        key="select",
+        translation_key="select",
+        press_fn=lambda atv: atv.remote_control.select(),
+    ),
+    AppleTvButtonDescription(
+        key="back",
+        translation_key="back",
+        press_fn=lambda atv: atv.remote_control.menu(),
+    ),
+    AppleTvButtonDescription(
+        key="tv",
+        translation_key="tv",
+        press_fn=lambda atv: atv.remote_control.home(),
+    ),
+    AppleTvButtonDescription(
         key="back_long_press",
         translation_key="back_long_press",
         press_fn=lambda atv: atv.remote_control.menu(action=InputAction.Hold),
@@ -42,13 +77,13 @@ async def async_setup_entry(
     config_entry: AppleTvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the long press buttons."""
+    """Set up the remote control buttons."""
     coordinator = config_entry.runtime_data
     async_add_entities(AppleTvButton(coordinator, description) for description in BUTTONS)
 
 
 class AppleTvButton(AppleTvEntity, ButtonEntity):
-    """A long press of an Apple TV remote button."""
+    """A button of the Apple TV remote."""
 
     entity_description: AppleTvButtonDescription
 
@@ -60,7 +95,7 @@ class AppleTvButton(AppleTvEntity, ButtonEntity):
         self.entity_description = description
 
     async def async_press(self) -> None:
-        """Send the long press."""
+        """Send the button press."""
         await self._async_send(
-            f"long press {self.entity_description.key}", self.entity_description.press_fn
+            f"press {self.entity_description.key}", self.entity_description.press_fn
         )

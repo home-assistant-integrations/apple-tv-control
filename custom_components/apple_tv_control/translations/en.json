@@ -64,6 +64,27 @@
   },
   "entity": {
     "button": {
+      "up": {
+        "name": "Up"
+      },
+      "down": {
+        "name": "Down"
+      },
+      "left": {
+        "name": "Left"
+      },
+      "right": {
+        "name": "Right"
+      },
+      "select": {
+        "name": "Select"
+      },
+      "back": {
+        "name": "Back"
+      },
+      "tv": {
+        "name": "TV"
+      },
       "back_long_press": {
         "name": "Back (Long Press)"
       },
