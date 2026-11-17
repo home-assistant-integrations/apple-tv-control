@@ -34,7 +34,7 @@
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
 | **Home Assistant** | ≥ 2024.1.0 | Host platform |
-| **pyatv** | ≥ 10.0.0 | Apple TV communication library |
+| **pyatv** | ≥ 0.18.0 | Apple TV communication library |
 | **Python** | ≥ 3.13 | Runtime (matches Home Assistant core) |
 
 ---

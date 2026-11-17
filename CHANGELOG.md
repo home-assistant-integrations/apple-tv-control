@@ -26,7 +26,7 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 
 ### Notes
 
-- Requires Home Assistant ≥ 2024.1.0 and pyatv ≥ 10.0.0
+- Requires Home Assistant ≥ 2024.1.0 and pyatv ≥ 0.18.0
 - Apple TV 4th generation or later recommended
 - Companion protocol pairing is optional; integration falls back to MRP-only if pairing fails
 - This is the initial release
