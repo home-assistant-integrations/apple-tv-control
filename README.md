@@ -43,8 +43,8 @@ Apple TV Control is not in the HACS default store, so HACS needs it as a custom 
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**
 2. Search for **Apple TV Control**
-3. Select your Apple TV from the discovered devices (or enter the IP address manually)
-4. Complete the pairing process by entering the PIN code displayed on your Apple TV
+3. Select your Apple TV from the discovered devices (or enter its IPv4 address manually)
+4. Pair by entering the PIN codes your Apple TV displays. It shows one PIN per protocol that needs pairing (on current tvOS: AirPlay and Companion)
 5. The integration will create a media player entity and button entities for your Apple TV
 
 ## Entities Created
@@ -135,14 +135,15 @@ script:
 
 - **Deep Sleep**: When Apple TV enters deep sleep (low-power mode), it becomes unreachable. The integration will mark entities as unavailable and attempt to reconnect when the device wakes.
 - **Power On from Deep Sleep**: If the Apple TV is in deep sleep, power-on may require a Wake-on-LAN packet (not yet supported). Using a smart plug as a fallback is recommended.
-- **Companion Protocol**: Enhanced power management requires Companion protocol pairing. If pairing fails, the integration falls back to MRP-only mode.
+- **Companion Protocol**: Power control and some remote commands need the Companion protocol. If the Apple TV does not offer it for pairing, those commands may not work.
+- **Mute**: The Apple TV has no mute command. Muting sets the volume to 0 and unmuting restores the previous volume.
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | Device not discovered | Ensure Apple TV and Home Assistant are on the same network; try manual IP entry |
-| Pairing fails | Restart the pairing process from the integration options; ensure you enter the PIN promptly |
+| Pairing fails | Add the integration again and enter each PIN promptly; if the Apple TV later rejects the credentials, Home Assistant asks you to pair it again |
 | Entities show unavailable | Check that the Apple TV is powered on and reachable; check Home Assistant logs for connection errors |
 | Commands not working | Verify the entity is available (not unavailable); check logs for pyatv errors |
 

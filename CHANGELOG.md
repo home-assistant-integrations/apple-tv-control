@@ -15,7 +15,7 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 ### Added
 
 - **Project scaffolding**: Integration entry point, manifest, constants, HACS metadata, and localization strings
-- **Config flow**: UI-based device discovery (manual IP entry and zeroconf auto-discovery), MRP/Companion pairing with PIN entry, reauth flow, and options flow for friendly name override
+- **Config flow**: UI-based device discovery (manual IP entry and zeroconf auto-discovery), PIN pairing of every protocol the Apple TV requires (AirPlay and Companion on current tvOS), reauth flow, and options flow for friendly name override
 - **Connection coordinator**: Reliable connection management with push updates, polling fallback (30s interval), and exponential backoff reconnection (max 3 attempts)
 - **Media player entity**: Core controls including power on/off, play/pause/stop, volume up/down/mute, next/previous track, and media seeking; media metadata display (title, artist, album, duration, position, app name)
 - **Navigation services**: Custom Home Assistant services for directional navigation (`apple_tv_control.navigate`), select (`apple_tv_control.select`), and back (`apple_tv_control.back`)
@@ -24,9 +24,23 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 - **Documentation**: Full `README.md` with installation instructions, entity table, service examples, automation/script usage, known limitations, and troubleshooting guide
 - **Design document**: Comprehensive software design and implementation plan at `docs/dev/DESIGN_AND_IMPLEMENTATION.md`
 
+### Fixed
+
+Fixes for installs taken from `main` before this release:
+
+- Config flow failed with "Invalid handler specified": imports of names pyatv does not have (`PyatvError`, `PowerState` from `pyatv.interface`)
+- Pairing only tried MRP, which current tvOS no longer pairs; wrong PINs now show an error instead of aborting
+- Setup failed after pairing (polling interval not a `timedelta`, push updater started with `await`), and push updates and reconnects never ran because the listener methods did not match pyatv
+- Media player crashed when disconnected and on every state update (non-existent `MediaPlayerState.UNAVAILABLE` and `PLAY_PAUSE` feature); mute, seek, app name and position time now work
+- Button names repeated the device name; entities now update from pushed state
+- Zeroconf discovery matched every HomeKit and AirPlay device and created duplicate flows; it now matches Apple TVs only and asks for confirmation
+- Rejected credentials now start re-authentication, which updates the existing entry
+- Options flow crashed when opened; the name option now renames the device
+- Services crashed on Home Assistant before 2025.10
+- Added `translations/en.json`, which custom integrations need for their UI texts
+
 ### Notes
 
-- Requires Home Assistant ≥ 2024.1.0 and pyatv ≥ 0.18.0
+- Requires Home Assistant ≥ 2024.12.0 and pyatv ≥ 0.18.0
 - Apple TV 4th generation or later recommended
-- Companion protocol pairing is optional; integration falls back to MRP-only if pairing fails
 - This is the initial release
