@@ -52,8 +52,14 @@ Apple TV Control is not in the HACS default store, so HACS needs it as a custom 
 | Entity | Type | Description |
 |--------|------|-------------|
 | `media_player.{name}` | Media Player | Main control entity with power, playback, and volume |
+| `button.{name}_up`, `_down`, `_left`, `_right` | Button | Navigate up, down, left, right |
+| `button.{name}_select` | Button | Press Select (center) |
+| `button.{name}_back` | Button | Press the Back (Menu) button |
+| `button.{name}_tv` | Button | Press the TV (Home) button |
 | `button.{name}_back_long_press` | Button | Long-press the Back (Menu) button |
 | `button.{name}_tv_long_press` | Button | Long-press the TV (Home) button |
+
+The buttons appear on the device page and as device actions in automations (for example **Press Up**).
 
 ## Custom Services
 
@@ -136,7 +142,7 @@ script:
 - **Deep Sleep**: When Apple TV enters deep sleep (low-power mode), it becomes unreachable. The integration will mark entities as unavailable and attempt to reconnect when the device wakes.
 - **Power On from Deep Sleep**: If the Apple TV is in deep sleep, power-on may require a Wake-on-LAN packet (not yet supported). Using a smart plug as a fallback is recommended.
 - **Companion Protocol**: Power control and some remote commands need the Companion protocol. If the Apple TV does not offer it for pairing, those commands may not work.
-- **Mute**: The Apple TV has no mute command. Muting sets the volume to 0 and unmuting restores the previous volume.
+- **Mute**: The Apple TV has no mute command. When its audio output has a volume level (for example a HomePod or AirPlay speaker), muting sets the volume to 0 and unmuting restores it. When the Apple TV controls the TV volume over HDMI-CEC it only supports volume up and down, so Home Assistant does not offer mute.
 
 ## Troubleshooting
 
