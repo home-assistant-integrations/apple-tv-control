@@ -1,6 +1,7 @@
 # Apple TV Control
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=home-assistant-integrations&repository=apple-tv-control&category=integration)
+[![Open your Home Assistant instance and manage your pending updates.](https://my.home-assistant.io/badges/updates.svg)](https://my.home-assistant.io/redirect/updates/)
 
 A Home Assistant custom integration for comprehensive Apple TV remote control. Unlike the default Home Assistant Apple TV integration, which focuses on metadata and playback state, this integration prioritizes **device control** — navigation, media playback, power management, and advanced button actions (long press).
 
