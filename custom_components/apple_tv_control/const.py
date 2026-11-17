@@ -1,5 +1,7 @@
 """Constants for the Apple TV Control integration."""
 
+import pyatv.exceptions
+
 DOMAIN = "apple_tv_control"
 NAME = "Apple TV Control"
 VERSION = "0.1.0"
@@ -8,8 +10,7 @@ VERSION = "0.1.0"
 PLATFORMS = ["media_player", "button"]
 
 # Config entry data keys
-CONF_MRP_CREDENTIALS = "mrp_credentials"
-CONF_COMPANION_CREDENTIALS = "companion_credentials"
+CONF_CREDENTIALS = "credentials"  # {pyatv Protocol name: credentials}
 CONF_IDENTIFIER = "identifier"
 CONF_HOST = "host"
 CONF_NAME = "name"
@@ -24,3 +25,11 @@ UPDATE_INTERVAL = 30
 MAX_RECONNECT_ATTEMPTS = 3
 RECONNECT_DELAY = 5  # Base delay in seconds, with exponential backoff
 
+# pyatv has no common base exception class, so collect every exception it defines
+PYATV_ERRORS: tuple[type[Exception], ...] = tuple(
+    obj
+    for obj in vars(pyatv.exceptions).values()
+    if isinstance(obj, type)
+    and issubclass(obj, Exception)
+    and obj.__module__ == pyatv.exceptions.__name__
+)

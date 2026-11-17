@@ -2,140 +2,65 @@
 
 from __future__ import annotations
 
-import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
-from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
+from pyatv.const import InputAction
+from pyatv.interface import AppleTV
+
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-import pyatv.const
+from .coordinator import AppleTvConfigEntry, AppleTvCoordinator
+from .entity import AppleTvEntity
 
-from .const import CONF_IDENTIFIER, DOMAIN
-from .coordinator import AppleTvCoordinator
 
-_LOGGER = logging.getLogger(__name__)
+@dataclass(frozen=True, kw_only=True)
+class AppleTvButtonDescription(ButtonEntityDescription):
+    """Describes an Apple TV button."""
+
+    press_fn: Callable[[AppleTV], Awaitable[None]]
+
+
+BUTTONS = (
+    AppleTvButtonDescription(
+        key="back_long_press",
+        translation_key="back_long_press",
+        press_fn=lambda atv: atv.remote_control.menu(action=InputAction.Hold),
+    ),
+    AppleTvButtonDescription(
+        key="tv_long_press",
+        translation_key="tv_long_press",
+        press_fn=lambda atv: atv.remote_control.home(action=InputAction.Hold),
+    ),
+)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: AppleTvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up button entities from a config entry."""
-    identifier = config_entry.data[CONF_IDENTIFIER]
-    name = config_entry.data.get("name", "Apple TV")
-
-    async_add_entities(
-        [
-            AppleTvBackLongPressButton(config_entry, identifier, name),
-            AppleTvTvLongPressButton(config_entry, identifier, name),
-        ]
-    )
+    """Set up the long press buttons."""
+    coordinator = config_entry.runtime_data
+    async_add_entities(AppleTvButton(coordinator, description) for description in BUTTONS)
 
 
-class AppleTvBackLongPressButton(ButtonEntity):
-    """Button entity for long-pressing the Back (Menu) button."""
+class AppleTvButton(AppleTvEntity, ButtonEntity):
+    """A long press of an Apple TV remote button."""
 
-    _attr_has_entity_name = True
-    _attr_translation_key = "back_long_press"
+    entity_description: AppleTvButtonDescription
 
     def __init__(
-        self,
-        config_entry: ConfigEntry,
-        identifier: str,
-        name: str,
+        self, coordinator: AppleTvCoordinator, description: AppleTvButtonDescription
     ) -> None:
         """Initialize the button."""
-        self._config_entry = config_entry
-        self._attr_unique_id = f"{identifier}_back_long_press"
-        self._attr_name = f"{name} Back (Long Press)"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, identifier)},
-            "name": name,
-            "manufacturer": "Apple Inc.",
-            "model": "Apple TV",
-        }
-
-    @property
-    def available(self) -> bool:
-        """Return whether the button is available."""
-        coordinator = _get_coordinator_for_entity_by_entry_id(
-            self.hass, self._config_entry.entry_id
-        )
-        if coordinator is None:
-            return False
-        return coordinator.connected
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
 
     async def async_press(self) -> None:
-        """Handle the button press."""
-        coordinator = _get_coordinator_for_entity_by_entry_id(
-            self.hass, self._config_entry.entry_id
+        """Send the long press."""
+        await self._async_send(
+            f"long press {self.entity_description.key}", self.entity_description.press_fn
         )
-        if coordinator is None or not coordinator.connected:
-            _LOGGER.warning("Apple TV not connected for %s", self._attr_name)
-            return
-
-        try:
-            await coordinator.remote_control.menu(action=pyatv.const.InputAction.Hold)
-            _LOGGER.debug("Sent back long press to %s", self._attr_name)
-        except Exception as ex:
-            _LOGGER.error("Failed to send back long press: %s", ex)
-
-
-class AppleTvTvLongPressButton(ButtonEntity):
-    """Button entity for long-pressing the TV (Home) button."""
-
-    _attr_has_entity_name = True
-    _attr_translation_key = "tv_long_press"
-
-    def __init__(
-        self,
-        config_entry: ConfigEntry,
-        identifier: str,
-        name: str,
-    ) -> None:
-        """Initialize the button."""
-        self._config_entry = config_entry
-        self._attr_unique_id = f"{identifier}_tv_long_press"
-        self._attr_name = f"{name} TV (Long Press)"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, identifier)},
-            "name": name,
-            "manufacturer": "Apple Inc.",
-            "model": "Apple TV",
-        }
-
-    @property
-    def available(self) -> bool:
-        """Return whether the button is available."""
-        coordinator = _get_coordinator_for_entity_by_entry_id(
-            self.hass, self._config_entry.entry_id
-        )
-        if coordinator is None:
-            return False
-        return coordinator.connected
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        coordinator = _get_coordinator_for_entity_by_entry_id(
-            self.hass, self._config_entry.entry_id
-        )
-        if coordinator is None or not coordinator.connected:
-            _LOGGER.warning("Apple TV not connected for %s", self._attr_name)
-            return
-
-        try:
-            await coordinator.remote_control.home(action=pyatv.const.InputAction.Hold)
-            _LOGGER.debug("Sent TV long press to %s", self._attr_name)
-        except Exception as ex:
-            _LOGGER.error("Failed to send TV long press: %s", ex)
-
-
-def _get_coordinator_for_entity_by_entry_id(
-    hass: HomeAssistant, entry_id: str
-) -> AppleTvCoordinator | None:
-    """Find the coordinator for a given config entry ID."""
-    if entry_id in hass.data.get(DOMAIN, {}):
-        return hass.data[DOMAIN][entry_id]
-    return None

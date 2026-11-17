@@ -1,280 +1,217 @@
-"""Media player platform for Apple TV Control integration."""
+"""Media player platform for the Apple TV Control integration."""
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from datetime import datetime
+
+from pyatv.const import DeviceState, PowerState
+from pyatv.interface import AppleTV
+import voluptuous as vol
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
-    MediaPlayerEntityFeature as Feature,
     MediaPlayerState,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util import dt as dt_util
 
-from pyatv.const import DeviceState, PowerState
+from .coordinator import AppleTvConfigEntry, AppleTvCoordinator
+from .entity import AppleTvEntity
 
-from .const import CONF_IDENTIFIER, CONF_NAME, DOMAIN
-from .coordinator import AppleTvCoordinator
+SERVICE_NAVIGATE = "navigate"
+SERVICE_SELECT = "select"
+SERVICE_BACK = "back"
+ATTR_DIRECTION = "direction"
+DIRECTIONS = ["up", "down", "left", "right"]
 
-_LOGGER = logging.getLogger(__name__)
+DEVICE_STATES = {
+    DeviceState.Playing: MediaPlayerState.PLAYING,
+    DeviceState.Seeking: MediaPlayerState.PLAYING,
+    DeviceState.Paused: MediaPlayerState.PAUSED,
+    DeviceState.Loading: MediaPlayerState.BUFFERING,
+    DeviceState.Stopped: MediaPlayerState.IDLE,
+    DeviceState.Idle: MediaPlayerState.IDLE,
+}
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: AppleTvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Apple TV media player from a config entry."""
-    coordinator: AppleTvCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_entities([AppleTvMediaPlayer(config_entry, coordinator)])
+    """Set up the Apple TV media player and its remote control services."""
+    async_add_entities([AppleTvMediaPlayer(config_entry.runtime_data)])
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_NAVIGATE,
+        {vol.Required(ATTR_DIRECTION): vol.In(DIRECTIONS)},
+        "async_navigate",
+    )
+    platform.async_register_entity_service(SERVICE_SELECT, {}, "async_select")
+    platform.async_register_entity_service(SERVICE_BACK, {}, "async_back")
 
 
-class AppleTvMediaPlayer(MediaPlayerEntity):
+class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
     """Representation of an Apple TV media player."""
 
-    _attr_has_entity_name = True
     _attr_name = None
+    _attr_supported_features = (
+        MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.PLAY
+        | MediaPlayerEntityFeature.PAUSE
+        | MediaPlayerEntityFeature.STOP
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.SEEK
+        | MediaPlayerEntityFeature.VOLUME_STEP
+        | MediaPlayerEntityFeature.VOLUME_MUTE
+    )
 
-    def __init__(
-        self, config_entry: ConfigEntry, coordinator: AppleTvCoordinator
-    ) -> None:
-        """Initialize the Apple TV media player."""
-        self.coordinator = coordinator
-        self.config_entry = config_entry
-
-        # Device info
-        identifier = config_entry.data[CONF_IDENTIFIER]
-        name = config_entry.data.get(CONF_NAME, "Apple TV")
-        self._attr_unique_id = f"{identifier}_media_player"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, identifier)},
-            name=name,
-            manufacturer="Apple Inc.",
-            model="Apple TV",
-        )
-
-    @property
-    def supported_features(self) -> MediaPlayerEntityFeature:
-        """Return the supported features flags."""
-        return (
-            Feature.TURN_ON
-            | Feature.TURN_OFF
-            | Feature.PLAY
-            | Feature.PAUSE
-            | Feature.STOP
-            | Feature.PLAY_PAUSE
-            | Feature.VOLUME_UP
-            | Feature.VOLUME_DOWN
-            | Feature.VOLUME_MUTE
-            | Feature.PREVIOUS_TRACK
-            | Feature.NEXT_TRACK
-        )
+    def __init__(self, coordinator: AppleTvCoordinator) -> None:
+        """Initialize the media player."""
+        super().__init__(coordinator, "media_player")
+        self._volume_before_mute: float | None = None
 
     @property
-    def state(self) -> MediaPlayerState | None:
+    def state(self) -> MediaPlayerState:
         """Return the current state."""
-        if not self.coordinator.connected:
-            return MediaPlayerState.UNAVAILABLE
-
-        power_state = self.coordinator.data.power_state
-        if power_state == PowerState.Off:
+        data = self.coordinator.data
+        if data.power_state is PowerState.Off:
             return MediaPlayerState.OFF
-
-        # Device is on — check playing state
-        playing = self.coordinator.data.playing
-        if playing is not None:
-            device_state = playing.device_state
-            if device_state == DeviceState.Playing:
-                return MediaPlayerState.PLAYING
-            if device_state == DeviceState.Paused:
-                return MediaPlayerState.PAUSED
-            if device_state == DeviceState.Loading:
-                return MediaPlayerState.BUFFERING
-            if device_state == DeviceState.Stopped:
-                return MediaPlayerState.IDLE
-
-        return MediaPlayerState.IDLE
+        if data.playing is None:
+            return MediaPlayerState.IDLE
+        return DEVICE_STATES.get(data.playing.device_state, MediaPlayerState.IDLE)
 
     @property
     def media_title(self) -> str | None:
-        """Return the title of current playing media."""
+        """Return the title of the current media."""
         playing = self.coordinator.data.playing
-        if playing:
-            return playing.title
-        return None
+        return playing.title if playing else None
 
     @property
     def media_artist(self) -> str | None:
-        """Return the artist of current playing media."""
+        """Return the artist of the current media."""
         playing = self.coordinator.data.playing
-        if playing:
-            return playing.artist
-        return None
+        return playing.artist if playing else None
 
     @property
     def media_album_name(self) -> str | None:
-        """Return the album name of current playing media."""
+        """Return the album of the current media."""
         playing = self.coordinator.data.playing
-        if playing:
-            return playing.album
-        return None
+        return playing.album if playing else None
 
     @property
     def media_duration(self) -> int | None:
-        """Return the duration of current playing media in seconds."""
+        """Return the duration of the current media in seconds."""
         playing = self.coordinator.data.playing
-        if playing and playing.total_time is not None:
-            return playing.total_time
-        return None
+        return playing.total_time if playing else None
 
     @property
     def media_position(self) -> int | None:
-        """Return the position of current playing media in seconds."""
+        """Return the position of the current media in seconds."""
         playing = self.coordinator.data.playing
-        if playing and playing.position is not None:
-            return playing.position
-        return None
+        return playing.position if playing else None
 
     @property
-    def media_position_updated_at(self) -> Any:
-        """Return the time when the position was last updated."""
-        return dt_util.utcnow()
+    def media_position_updated_at(self) -> datetime | None:
+        """Return when the position was last reported by the device."""
+        return self.coordinator.data.position_updated_at
 
     @property
     def app_name(self) -> str | None:
-        """Return the name of the current app."""
+        """Return the name of the app in the foreground."""
         return self.coordinator.data.app_name
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the Apple TV."""
-        if not self.coordinator.connected:
-            _LOGGER.warning("Not connected to Apple TV, cannot turn on")
-            return
+    @property
+    def is_volume_muted(self) -> bool:
+        """Return whether the volume is muted by this entity."""
+        return self._volume_before_mute is not None
 
-        try:
-            await self.coordinator.power.turn_on()
-            await self.coordinator.async_request_refresh()
-        except Exception as ex:
-            _LOGGER.error("Failed to turn on Apple TV: %s", ex)
+    async def async_turn_on(self) -> None:
+        """Turn the Apple TV on."""
+        await self._async_send("turn on", lambda atv: atv.power.turn_on())
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the Apple TV."""
-        if not self.coordinator.connected:
-            _LOGGER.warning("Not connected to Apple TV, cannot turn off")
-            return
-
-        try:
-            await self.coordinator.power.turn_off()
-            await self.coordinator.async_request_refresh()
-        except Exception as ex:
-            _LOGGER.error("Failed to turn off Apple TV: %s", ex)
+    async def async_turn_off(self) -> None:
+        """Turn the Apple TV off."""
+        await self._async_send("turn off", lambda atv: atv.power.turn_off())
 
     async def async_media_play(self) -> None:
-        """Send play command."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.play()
-        except Exception as ex:
-            _LOGGER.error("Failed to send play command: %s", ex)
+        """Send play."""
+        await self._async_send("play", lambda atv: atv.remote_control.play())
 
     async def async_media_pause(self) -> None:
-        """Send pause command."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.pause()
-        except Exception as ex:
-            _LOGGER.error("Failed to send pause command: %s", ex)
-
-    async def async_media_stop(self) -> None:
-        """Send stop command."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.stop()
-        except Exception as ex:
-            _LOGGER.error("Failed to send stop command: %s", ex)
+        """Send pause."""
+        await self._async_send("pause", lambda atv: atv.remote_control.pause())
 
     async def async_media_play_pause(self) -> None:
-        """Send play/pause toggle command."""
-        if not self.coordinator.connected:
-            return
+        """Toggle play/pause."""
+        await self._async_send(
+            "toggle play/pause", lambda atv: atv.remote_control.play_pause()
+        )
 
-        try:
-            await self.coordinator.remote_control.play_pause()
-        except Exception as ex:
-            _LOGGER.error("Failed to send play/pause command: %s", ex)
-
-    async def async_volume_up(self) -> None:
-        """Volume up the Apple TV."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.volume_up()
-        except Exception as ex:
-            _LOGGER.error("Failed to send volume up command: %s", ex)
-
-    async def async_volume_down(self) -> None:
-        """Volume down the Apple TV."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.volume_down()
-        except Exception as ex:
-            _LOGGER.error("Failed to send volume down command: %s", ex)
-
-    async def async_mute_volume(self, mute: bool) -> None:
-        """Mute the Apple TV."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.mute()
-        except Exception as ex:
-            _LOGGER.error("Failed to send mute command: %s", ex)
+    async def async_media_stop(self) -> None:
+        """Send stop."""
+        await self._async_send("stop", lambda atv: atv.remote_control.stop())
 
     async def async_media_next_track(self) -> None:
-        """Send next track command."""
-        if not self.coordinator.connected:
-            return
-
-        try:
-            await self.coordinator.remote_control.next()
-        except Exception as ex:
-            _LOGGER.error("Failed to send next track command: %s", ex)
+        """Skip to the next track."""
+        await self._async_send("skip forward", lambda atv: atv.remote_control.next())
 
     async def async_media_previous_track(self) -> None:
-        """Send previous track command."""
-        if not self.coordinator.connected:
-            return
+        """Skip to the previous track."""
+        await self._async_send(
+            "skip back", lambda atv: atv.remote_control.previous()
+        )
 
-        try:
-            await self.coordinator.remote_control.previous()
-        except Exception as ex:
-            _LOGGER.error("Failed to send previous track command: %s", ex)
+    async def async_media_seek(self, position: float) -> None:
+        """Seek to a position in seconds."""
+        await self._async_send(
+            "seek", lambda atv: atv.remote_control.set_position(round(position))
+        )
 
-    async def async_update(self) -> None:
-        """Update the entity state from the coordinator."""
-        await self.coordinator.async_request_refresh()
+    async def async_volume_up(self) -> None:
+        """Turn the volume up."""
+        await self._async_send("turn volume up", lambda atv: atv.audio.volume_up())
 
-    async def async_set_media_position(self, position: int) -> None:
-        """Seek to a position in the media."""
-        if not self.coordinator.connected:
-            return
+    async def async_volume_down(self) -> None:
+        """Turn the volume down."""
+        await self._async_send(
+            "turn volume down", lambda atv: atv.audio.volume_down()
+        )
 
-        try:
-            await self.coordinator.metadata.seek(position * 1000)
-        except Exception as ex:
-            _LOGGER.error("Failed to seek: %s", ex)
+    async def async_mute_volume(self, mute: bool) -> None:
+        """Mute by setting the volume to 0 and restore it on unmute.
+
+        pyatv has no mute command, so the previous volume is remembered here.
+        """
+
+        async def _set_mute(atv: AppleTV) -> None:
+            if mute:
+                if self._volume_before_mute is None:
+                    self._volume_before_mute = atv.audio.volume
+                await atv.audio.set_volume(0.0)
+            elif self._volume_before_mute is not None:
+                await atv.audio.set_volume(self._volume_before_mute)
+                self._volume_before_mute = None
+
+        await self._async_send("mute" if mute else "unmute", _set_mute)
+        self.async_write_ha_state()
+
+    async def async_navigate(self, direction: str) -> None:
+        """Press a direction on the remote (service apple_tv_control.navigate)."""
+        await self._async_send(
+            f"navigate {direction}",
+            lambda atv: getattr(atv.remote_control, direction)(),
+        )
+
+    async def async_select(self) -> None:
+        """Press select on the remote (service apple_tv_control.select)."""
+        await self._async_send("select", lambda atv: atv.remote_control.select())
+
+    async def async_back(self) -> None:
+        """Press back/menu on the remote (service apple_tv_control.back)."""
+        await self._async_send("go back", lambda atv: atv.remote_control.menu())

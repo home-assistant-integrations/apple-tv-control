@@ -1,62 +1,68 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
-        "title": "Add Apple TV Device",
-        "description": "Select an Apple TV device to add to Home Assistant.",
+        "title": "Add Apple TV",
+        "description": "Enter the IP address of your Apple TV.",
         "data": {
-          "host": "Host"
+          "host": "IP address"
         },
         "data_description": {
-          "host": "The IP address or hostname of your Apple TV device."
+          "host": "The IPv4 address of the Apple TV, for example 192.168.1.20."
         }
       },
-      "discovery": {
-        "title": "Discover Apple TV Devices",
-        "description": "Select an Apple TV device from the list below.",
+      "zeroconf_confirm": {
+        "title": "Discovered Apple TV",
+        "description": "Do you want to set up {name}? The Apple TV will show PIN codes for pairing."
+      },
+      "pair_with_pin": {
+        "title": "Pair {protocol}",
+        "description": "Enter the PIN code that {name} shows on the TV to pair {protocol}.",
         "data": {
-          "device": "Device"
+          "pin": "PIN code"
         }
       },
-      "pair": {
-        "title": "Pair with Apple TV",
-        "description": "Pairing {protocol} protocol.\n{pin}",
-        "data": {
-          "pin": "PIN Code"
-        },
-        "data_description": {
-          "pin": "The PIN code for pairing."
-        }
+      "pair_no_pin": {
+        "title": "Pair {protocol}",
+        "description": "Enter the PIN code {pin} on {name} to pair {protocol}, then select Submit."
       },
       "reauth_confirm": {
-        "title": "Re-authenticate Apple TV",
-        "description": "Re-authenticate {name}.",
+        "title": "Pair {name} again",
+        "description": "{name} no longer accepts the stored credentials. Confirm its IP address to pair it again.",
         "data": {
-          "host": "Host"
-        },
-        "data_description": {
-          "host": "The IP address or hostname of your Apple TV device."
+          "host": "IP address"
         }
       }
     },
-    "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
-      "no_devices_found": "No Apple TV devices found on the network.",
-      "pairing_failed": "Pairing failed. Please try again.",
-      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
-    },
     "error": {
-      "cannot_connect": "Failed to connect to the device.",
-      "invalid_pin": "Invalid PIN code. Please try again.",
-      "unknown": "An unknown error occurred."
+      "cannot_connect": "No Apple TV answered at this IP address.",
+      "invalid_pin": "Wrong PIN code. Check the code shown on the TV and try again.",
+      "pairing_failed": "Pairing failed. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Apple TV is already configured.",
+      "already_in_progress": "This Apple TV is already being set up.",
+      "no_devices_found": "No Apple TV answered at the discovered address.",
+      "pairing_failed": "Pairing failed. Please try again.",
+      "reauth_successful": "The Apple TV was paired again.",
+      "wrong_device": "A different Apple TV answered at this IP address."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Apple TV Control options",
+        "data": {
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Name of the Apple TV device in Home Assistant."
+        }
+      }
     }
   },
   "entity": {
-    "media_player": {
-      "default": {
-        "name": "Apple TV"
-      }
-    },
     "button": {
       "back_long_press": {
         "name": "Back (Long Press)"

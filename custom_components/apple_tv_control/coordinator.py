@@ -1,285 +1,265 @@
-"""Coordinator for the Apple TV Control integration."""
+"""Connection and state handling for the Apple TV Control integration."""
 
 from __future__ import annotations
 
-import logging
+import asyncio
 from dataclasses import dataclass
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from datetime import datetime, timedelta
+import logging
 
 import pyatv
-from pyatv.const import Protocol
-from pyatv.exceptions import PyatvError
-from pyatv.interface import AppleTV, BaseConfig, Playing, PowerState, PushUpdater
+from pyatv import exceptions
+from pyatv.const import PowerState, Protocol
+from pyatv.interface import AppleTV, BaseConfig, Playing, PushUpdater
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_COMPANION_CREDENTIALS,
+    CONF_CREDENTIALS,
     CONF_HOST,
-    CONF_IDENTIFIER,
-    CONF_MRP_CREDENTIALS,
-    CONF_NAME,
-    DOMAIN,
     MAX_RECONNECT_ATTEMPTS,
+    PYATV_ERRORS,
     RECONNECT_DELAY,
     UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-MRP_PROTOCOL = Protocol.MRP
-COMPANION_PROTOCOL = Protocol.Companion
+# pyatv errors meaning the stored pairing credentials are no longer accepted
+AUTH_ERRORS = (
+    exceptions.AuthenticationError,
+    exceptions.InvalidCredentialsError,
+    exceptions.NoCredentialsError,
+)
+
+type AppleTvConfigEntry = ConfigEntry[AppleTvCoordinator]
+
+
+class CannotConnect(Exception):
+    """The Apple TV could not be reached."""
+
+
+async def async_scan_host(hass: HomeAssistant, host: str) -> BaseConfig | None:
+    """Scan one host and return its pyatv configuration, or None if nothing answered."""
+    devices = await pyatv.scan(hass.loop, hosts=[host])
+    return devices[0] if devices else None
 
 
 @dataclass
 class AppleTvData:
-    """Data held by the coordinator."""
+    """State of the Apple TV."""
 
     power_state: PowerState = PowerState.Unknown
     playing: Playing | None = None
-    connected: bool = False
     app_name: str | None = None
+    position_updated_at: datetime | None = None
 
 
 class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
-    """Manages Apple TV connection and state updates."""
+    """Keeps the connection to one Apple TV and its state.
 
-    config_entry: ConfigEntry
+    State changes are pushed by pyatv through the listener methods below; the
+    polling interval is a fallback that also reconnects a lost connection.
+    """
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-    ) -> None:
+    config_entry: AppleTvConfigEntry
+
+    def __init__(self, hass: HomeAssistant, config_entry: AppleTvConfigEntry) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
-            update_interval=UPDATE_INTERVAL,
+            config_entry=config_entry,
+            name=config_entry.title,
+            update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
-        self.config_entry = config_entry
         self.atv: AppleTV | None = None
-        self._push_updater: PushUpdater | None = None
-        self._connected = False
-        self._reconnect_attempts = 0
-
-        # Connection parameters from config entry
-        self._host = config_entry.data[CONF_HOST]
-        self._identifier = config_entry.data[CONF_IDENTIFIER]
-        self._mrp_credentials = config_entry.data.get(CONF_MRP_CREDENTIALS)
-        self._companion_credentials = config_entry.data.get(CONF_COMPANION_CREDENTIALS)
-        self._name = config_entry.data.get(CONF_NAME, DOMAIN)
-
-        # Initialize data
         self.data = AppleTvData()
+        self._closing = False
+        self._reconnect_task: asyncio.Task[None] | None = None
 
     @property
     def connected(self) -> bool:
-        """Return whether the coordinator is connected to the device."""
-        return self._connected
+        """Return whether there is a connection to the Apple TV."""
+        return self.atv is not None
 
-    async def _async_setup_services(self, config: BaseConfig) -> None:
-        """Apply credentials to the config services."""
-        if self._mrp_credentials:
-            mrp_service = config.get_service(MRP_PROTOCOL)
-            if mrp_service:
-                mrp_service.credentials = self._mrp_credentials
+    async def async_connect(self) -> None:
+        """Connect to the Apple TV.
 
-        if self._companion_credentials:
-            companion_service = config.get_service(COMPANION_PROTOCOL)
-            if companion_service:
-                companion_service.credentials = self._companion_credentials
+        Raises CannotConnect when it can't be reached and ConfigEntryAuthFailed
+        when it rejects the stored credentials.
+        """
+        host = self.config_entry.data[CONF_HOST]
+        try:
+            config = await async_scan_host(self.hass, host)
+        except (*PYATV_ERRORS, OSError, ValueError) as err:
+            raise CannotConnect(f"Scanning {host} failed: {err}") from err
+        if config is None:
+            raise CannotConnect(f"No Apple TV found at {host}")
 
-    async def connect(self) -> None:
-        """Establish connection to the Apple TV."""
-        if self._connected:
-            return
-
-        _LOGGER.info("Connecting to Apple TV at %s", self._host)
+        for protocol, credentials in self.config_entry.data.get(
+            CONF_CREDENTIALS, {}
+        ).items():
+            config.set_credentials(Protocol[protocol], credentials)
 
         try:
-            loop = self.hass.loop
-            # Scan for the specific device
-            devices = await pyatv.scan(loop, hosts=[self._host])
-            if not devices:
-                raise ConfigEntryNotReady(
-                    f"Apple TV at {self._host} not found on the network"
-                )
+            atv = await pyatv.connect(
+                config, self.hass.loop, session=async_get_clientsession(self.hass)
+            )
+        except AUTH_ERRORS as err:
+            raise ConfigEntryAuthFailed(
+                f"{self.config_entry.title} rejected the stored credentials: {err}"
+            ) from err
+        except (*PYATV_ERRORS, OSError) as err:
+            raise CannotConnect(f"Connecting to {host} failed: {err}") from err
 
-            config = devices[0]
-            await self._async_setup_services(config)
+        atv.listener = self
+        atv.power.listener = self
+        atv.push_updater.listener = self
+        atv.push_updater.start()
+        self._closing = False
+        self.atv = atv
+        await self._async_fetch_state()
+        _LOGGER.debug("Connected to %s at %s", self.config_entry.title, host)
 
-            # Connect to the device
-            self.atv = await pyatv.connect(config, loop)
-            self._connected = True
-            self._reconnect_attempts = 0
+    async def async_disconnect(self) -> None:
+        """Close the connection for good (entry unload)."""
+        self._closing = True
+        if self._reconnect_task is not None:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
 
-            # Set up push updater for real-time state changes
-            self._push_updater = self.atv.push_updater
-            self._push_updater.listener = self
-            await self._push_updater.start()
-
-            # Fetch initial state
-            await self._fetch_state()
-
-            _LOGGER.info("Connected to Apple TV %s", self._name)
-
-        except ConfigEntryNotReady:
-            raise
-        except PyatvError as ex:
-            raise ConfigEntryNotReady(
-                f"Failed to connect to Apple TV at {self._host}: {ex}"
-            ) from ex
-
-    async def disconnect(self) -> None:
-        """Gracefully close the connection."""
-        if not self._connected:
+        atv, self.atv = self.atv, None
+        if atv is None:
             return
-
-        _LOGGER.info("Disconnecting from Apple TV %s", self._name)
-
-        # Stop push updater first
-        if self._push_updater:
-            try:
-                await self._push_updater.stop()
-            except PyatvError as ex:
-                _LOGGER.debug("Error stopping push updater: %s", ex)
-            self._push_updater = None
-
-        # Close the connection
-        if self.atv:
-            try:
-                self.atv.close()
-            except PyatvError as ex:
-                _LOGGER.debug("Error closing connection: %s", ex)
-            self.atv = None
-
-        self._connected = False
-        self.data = AppleTvData()
+        try:
+            atv.push_updater.stop()
+        except PYATV_ERRORS as err:
+            _LOGGER.debug("Error stopping push updates: %s", err)
+        await asyncio.gather(*atv.close(), return_exceptions=True)
 
     async def _async_update_data(self) -> AppleTvData:
-        """Poll power state and metadata from the device.
+        """Poll the state, reconnecting first if the connection was lost."""
+        if self.atv is None:
+            try:
+                await self.async_connect()
+            except CannotConnect as err:
+                raise UpdateFailed(str(err)) from err
+            return self.data
 
-        This is called by the coordinator's polling interval as a fallback
-        when push updates are not available.
-        """
-        if not self._connected or not self.atv:
-            return AppleTvData()
-
-        try:
-            await self._fetch_state()
-        except PyatvError as ex:
-            _LOGGER.warning("Polling failed: %s", ex)
-            raise UpdateFailed(str(ex)) from ex
-
+        await self._async_fetch_state()
         return self.data
 
-    async def _fetch_state(self) -> None:
-        """Fetch current power state and metadata from the device."""
-        if not self.atv:
+    async def _async_fetch_state(self) -> None:
+        """Read power state, now playing and app from the device."""
+        if (atv := self.atv) is None:
             return
-
-        # Fetch power state
         try:
-            power = self.atv.power
-            self.data.power_state = power.power_state
-        except PyatvError as ex:
-            _LOGGER.debug("Failed to fetch power state: %s", ex)
-
-        # Fetch metadata (playing info)
+            self.data.power_state = atv.power.power_state
+        except PYATV_ERRORS as err:
+            _LOGGER.debug("Failed to read power state: %s", err)
         try:
-            metadata = self.atv.metadata
-            playing = await metadata.playing()
-            self.data.playing = playing
-            if playing and playing.title:
-                self.data.app_name = playing.title
-        except PyatvError as ex:
-            _LOGGER.debug("Failed to fetch metadata: %s", ex)
-            self.data.playing = None
+            self.data.playing = await atv.metadata.playing()
+            self.data.position_updated_at = dt_util.utcnow()
+        except PYATV_ERRORS as err:
+            _LOGGER.debug("Failed to read now playing: %s", err)
+        self.data.app_name = self._current_app_name()
 
-        self.data.connected = self._connected
+    def _current_app_name(self) -> str | None:
+        """Return the name of the app in the foreground, if the device tells."""
+        if self.atv is None:
+            return None
+        try:
+            app = self.atv.metadata.app
+        except PYATV_ERRORS:
+            return None
+        return app.name if app is not None else None
 
-    async def _handle_reconnect(self) -> None:
-        """Attempt to reconnect with exponential backoff."""
-        if self._reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
-            _LOGGER.warning(
-                "Max reconnection attempts (%d) reached for %s",
-                MAX_RECONNECT_ATTEMPTS,
-                self._name,
-            )
-            self.data.connected = False
+    # pyatv DeviceListener
+
+    def connection_lost(self, exception: Exception) -> None:
+        """Handle an unexpectedly lost connection."""
+        _LOGGER.warning(
+            "Connection to %s lost: %s", self.config_entry.title, exception
+        )
+        self._handle_disconnect()
+
+    def connection_closed(self) -> None:
+        """Handle a connection closed by the device."""
+        if self._closing or self.atv is None:
+            return
+        _LOGGER.info("Connection to %s was closed", self.config_entry.title)
+        self._handle_disconnect()
+
+    # pyatv PushListener
+
+    def playstatus_update(self, updater: PushUpdater, playstatus: Playing) -> None:
+        """Handle a now playing update."""
+        self.data.playing = playstatus
+        self.data.position_updated_at = dt_util.utcnow()
+        self.data.app_name = self._current_app_name()
+        self.async_set_updated_data(self.data)
+
+    def playstatus_error(self, updater: PushUpdater, exception: Exception) -> None:
+        """Handle an error in the push updates (pyatv retries by itself)."""
+        _LOGGER.debug("Push update error from %s: %s", self.config_entry.title, exception)
+
+    # pyatv PowerListener
+
+    def powerstate_update(self, old_state: PowerState, new_state: PowerState) -> None:
+        """Handle a power state change."""
+        self.data.power_state = new_state
+        self.async_set_updated_data(self.data)
+
+    # Reconnection
+
+    @callback
+    def _handle_disconnect(self) -> None:
+        """Drop the connection, mark entities unavailable and start reconnecting."""
+        atv, self.atv = self.atv, None
+        if atv is not None:
+            atv.close()
+        self.async_update_listeners()
+        if self._closing or (
+            self._reconnect_task is not None and not self._reconnect_task.done()
+        ):
+            return
+        self._reconnect_task = self.config_entry.async_create_background_task(
+            self.hass, self._async_reconnect(), f"Reconnect {self.config_entry.title}"
+        )
+
+    async def _async_reconnect(self) -> None:
+        """Reconnect with exponential backoff; afterwards polling keeps retrying."""
+        for attempt in range(1, MAX_RECONNECT_ATTEMPTS + 1):
+            await asyncio.sleep(RECONNECT_DELAY * 2 ** (attempt - 1))
+            if self._closing or self.atv is not None:
+                return
+            try:
+                await self.async_connect()
+            except CannotConnect as err:
+                _LOGGER.debug(
+                    "Reconnect attempt %d/%d to %s failed: %s",
+                    attempt,
+                    MAX_RECONNECT_ATTEMPTS,
+                    self.config_entry.title,
+                    err,
+                )
+                continue
+            except ConfigEntryAuthFailed as err:
+                _LOGGER.warning("%s", err)
+                self.config_entry.async_start_reauth(self.hass)
+                return
+            _LOGGER.info("Reconnected to %s", self.config_entry.title)
             self.async_set_updated_data(self.data)
             return
 
-        self._reconnect_attempts += 1
-        delay = RECONNECT_DELAY * (2 ** (self._reconnect_attempts - 1))
-        _LOGGER.info(
-            "Reconnecting to %s in %d seconds (attempt %d/%d)",
-            self._name,
-            delay,
-            self._reconnect_attempts,
-            MAX_RECONNECT_ATTEMPTS,
+        _LOGGER.warning(
+            "Could not reconnect to %s, retrying every %d seconds",
+            self.config_entry.title,
+            UPDATE_INTERVAL,
         )
-
-        try:
-            await self.disconnect()
-            await self.hass.async_create_task(self.connect())
-        except (ConfigEntryNotReady, PyatvError) as ex:
-            _LOGGER.warning("Reconnection attempt %d failed: %s", self._reconnect_attempts, ex)
-
-    # PushUpdater listener methods
-
-    async def push_update(self, updater: PushUpdater, data: Playing) -> None:
-        """Handle push update from the device."""
-        _LOGGER.debug("Received push update: %s", data)
-        self.data.playing = data
-        if data and data.title:
-            self.data.app_name = data.title
-        self.data.connected = self._connected
-        self.async_set_updated_data(self.data)
-
-    async def connection_lost(self) -> None:
-        """Handle connection lost event from push updater."""
-        _LOGGER.warning("Connection lost to %s, attempting to reconnect", self._name)
-        self._connected = False
-        await self._handle_reconnect()
-
-    @property
-    def remote_control(self) -> pyatv.interface.RemoteControl:
-        """Return the remote control interface."""
-        if not self.atv:
-            raise RuntimeError("Not connected to Apple TV")
-        return self.atv.remote_control
-
-    @property
-    def power(self) -> pyatv.interface.Power:
-        """Return the power management interface."""
-        if not self.atv:
-            raise RuntimeError("Not connected to Apple TV")
-        return self.atv.power
-
-    @property
-    def metadata(self) -> pyatv.interface.Metadata:
-        """Return the metadata interface."""
-        if not self.atv:
-            raise RuntimeError("Not connected to Apple TV")
-        return self.atv.metadata
-
-
-async def async_setup_coordinator(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> AppleTvCoordinator:
-    """Set up the coordinator for a config entry."""
-    coordinator = AppleTvCoordinator(hass, config_entry)
-    try:
-        await coordinator.connect()
-    except ConfigEntryNotReady:
-        raise
-    except Exception as ex:
-        raise ConfigEntryNotReady(
-            f"Failed to set up coordinator for {config_entry.data.get(CONF_NAME, 'Apple TV')}: {ex}"
-        ) from ex
-    return coordinator
