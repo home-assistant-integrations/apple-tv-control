@@ -1,6 +1,6 @@
 # Apple TV Control
 
-[![Open your Home Assistant instance and search for Apple TV Control](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=home-assistant-integrations&repository=apple-tv-control)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=home-assistant-integrations&repository=apple-tv-control&category=integration)
 
 A Home Assistant custom integration for comprehensive Apple TV remote control. Unlike the default Home Assistant Apple TV integration, which focuses on metadata and playback state, this integration prioritizes **device control** — navigation, media playback, power management, and advanced button actions (long press).
 
@@ -27,10 +27,12 @@ Built on [pyatv](https://pyatv.dev) for Apple TV communication.
 
 ### Via HACS (Recommended)
 
-1. Open HACS in Home Assistant
-2. Search for **Apple TV Control**
-3. Click **Download**
-4. Restart Home Assistant
+Apple TV Control is not in the HACS default store, so HACS needs it as a custom repository:
+
+1. Click the **Open your Home Assistant instance** button at the top of this page and confirm **Add**.
+   Or add it by hand: in HACS, open the ⋮ menu → **Custom repositories**, enter `https://github.com/home-assistant-integrations/apple-tv-control`, choose the type **Integration** and click **Add**.
+2. Open **Apple TV Control** in HACS and click **Download**
+3. Restart Home Assistant
 
 ### Manual Installation
 
