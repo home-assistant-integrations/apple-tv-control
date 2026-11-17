@@ -20,9 +20,10 @@ jobs:
         uses: home-assistant/actions/hassfest@master
 
       - name: Ruff linting
-        uses: chartboost/ruff-action@v1
+        uses: astral-sh/ruff-action@v4.1.0
         with:
-          args: --select E,F,W --ignore E501 custom_components/
+          args: check --select E,F,W --ignore E501
+          src: custom_components/
 
       - name: Check manifest
         run: |
