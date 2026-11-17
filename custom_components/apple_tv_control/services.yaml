@@ -35,7 +35,7 @@ select:
 back:
   fields:
     entity_id:
-      friendly_name: "Back"
+      friendly_name: Back
       required: true
       selector:
         entity:

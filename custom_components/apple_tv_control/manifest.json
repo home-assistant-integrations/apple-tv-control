@@ -12,7 +12,7 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/home-assistant-integrations/apple-tv-control/issues",
   "loggers": ["pyatv"],
-  "requirements": ["pyatv==0.18.0"],
+  "requirements": ["pyatv>=0.18.0"],
   "version": "2026.11.0",
   "zeroconf": [
     "_hap._tcp.local.",
