@@ -18,6 +18,7 @@ from pyatv.interface import AppleTV, BaseConfig, Playing, PowerState, PushUpdate
 from .const import (
     CONF_COMPANION_CREDENTIALS,
     CONF_HOST,
+    CONF_IDENTIFIER,
     CONF_MRP_CREDENTIALS,
     CONF_NAME,
     DOMAIN,

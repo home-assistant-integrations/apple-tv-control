@@ -112,3 +112,13 @@ The document will cover a **full greenfield design** for a **Home Assistant cust
 - `README.md` — Full installation instructions, entity docs, service examples, troubleshooting
 
 **Definition of Done:** Integration is properly packaged for HACS distribution with CI validation, license, and user-facing documentation.
+
+### ✓ Step 8: Fix CI workflow failures
+
+**Goal:** Diagnose and fix the failing GitHub Actions validate workflow.
+
+**Root Cause:** `CONF_IDENTIFIER` was used in `coordinator.py` but never imported from `const.py`, causing ruff linting to fail with `F821 Undefined name 'CONF_IDENTIFIER'`.
+
+**Fix:** Added `CONF_IDENTIFIER` to the import block in `coordinator.py`.
+
+**Definition of Done:** CI workflow passes all steps (hassfest, ruff linting, manifest check).
