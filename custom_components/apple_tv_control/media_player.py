@@ -9,6 +9,7 @@ from pyatv.interface import AppleTV
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
+    MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
@@ -74,6 +75,7 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
     """Representation of an Apple TV media player."""
 
     _attr_name = None
+    _attr_device_class = MediaPlayerDeviceClass.TV
 
     def __init__(self, coordinator: AppleTvCoordinator) -> None:
         """Initialize the media player."""

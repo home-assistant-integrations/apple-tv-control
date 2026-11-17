@@ -1,0 +1,33 @@
+{
+  "entity": {
+    "button": {
+      "up": {
+        "default": "mdi:chevron-up"
+      },
+      "down": {
+        "default": "mdi:chevron-down"
+      },
+      "left": {
+        "default": "mdi:chevron-left"
+      },
+      "right": {
+        "default": "mdi:chevron-right"
+      },
+      "select": {
+        "default": "mdi:circle-outline"
+      },
+      "back": {
+        "default": "mdi:arrow-u-left-top"
+      },
+      "tv": {
+        "default": "mdi:television"
+      },
+      "back_long_press": {
+        "default": "mdi:gesture-tap-hold"
+      },
+      "tv_long_press": {
+        "default": "mdi:gesture-tap-hold"
+      }
+    }
+  }
+}
