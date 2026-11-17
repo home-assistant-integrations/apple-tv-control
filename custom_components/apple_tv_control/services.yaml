@@ -15,7 +15,7 @@ navigate:
             - label: "Right"
               value: "right"
     entity_id:
-      friendly_name: Entity ID
+      friendly_name: "Entity ID"
       required: true
       selector:
         entity:
@@ -25,7 +25,7 @@ navigate:
 select:
   fields:
     entity_id:
-      friendly_name: Entity ID
+      friendly_name: "Select"
       required: true
       selector:
         entity:
@@ -35,7 +35,7 @@ select:
 back:
   fields:
     entity_id:
-      friendly_name: Entity ID
+      friendly_name: "Back"
       required: true
       selector:
         entity:
