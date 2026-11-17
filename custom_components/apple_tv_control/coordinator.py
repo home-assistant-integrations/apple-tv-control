@@ -9,8 +9,8 @@ import logging
 
 import pyatv
 from pyatv import exceptions
-from pyatv.const import PowerState, Protocol
-from pyatv.interface import AppleTV, BaseConfig, Playing, PushUpdater
+from pyatv.const import FeatureName, FeatureState, PowerState, Protocol
+from pyatv.interface import AppleTV, BaseConfig, OutputDevice, Playing, PushUpdater
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -58,6 +58,7 @@ class AppleTvData:
     playing: Playing | None = None
     app_name: str | None = None
     position_updated_at: datetime | None = None
+    volume: float | None = None  # percent, only meaningful when can_set_volume
 
 
 class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
@@ -87,6 +88,22 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
     def connected(self) -> bool:
         """Return whether there is a connection to the Apple TV."""
         return self.atv is not None
+
+    @property
+    def can_set_volume(self) -> bool:
+        """Return whether the current audio output has a settable volume level.
+
+        True for outputs like HomePod or AirPlay speakers. When the Apple TV
+        controls the TV volume over HDMI-CEC it only supports volume up/down.
+        """
+        if self.atv is None:
+            return False
+        try:
+            return self.atv.features.in_state(
+                FeatureState.Available, FeatureName.Volume, FeatureName.SetVolume
+            )
+        except PYATV_ERRORS:
+            return False
 
     async def async_connect(self) -> None:
         """Connect to the Apple TV.
@@ -120,6 +137,7 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
 
         atv.listener = self
         atv.power.listener = self
+        atv.audio.listener = self
         atv.push_updater.listener = self
         atv.push_updater.start()
         self._closing = False
@@ -168,6 +186,10 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
             self.data.position_updated_at = dt_util.utcnow()
         except PYATV_ERRORS as err:
             _LOGGER.debug("Failed to read now playing: %s", err)
+        try:
+            self.data.volume = atv.audio.volume
+        except PYATV_ERRORS as err:
+            _LOGGER.debug("Failed to read volume: %s", err)
         self.data.app_name = self._current_app_name()
 
     def _current_app_name(self) -> str | None:
@@ -215,6 +237,24 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
         """Handle a power state change."""
         self.data.power_state = new_state
         self.async_set_updated_data(self.data)
+
+    # pyatv AudioListener
+
+    def volume_update(self, old_level: float, new_level: float) -> None:
+        """Handle a volume change."""
+        self.data.volume = new_level
+        self.async_set_updated_data(self.data)
+
+    def volume_device_update(
+        self, output_device: OutputDevice, old_level: float, new_level: float
+    ) -> None:
+        """Ignore volume changes of single output devices."""
+
+    def outputdevices_update(
+        self, old_devices: list[OutputDevice], new_devices: list[OutputDevice]
+    ) -> None:
+        """Rewrite the states: the volume capabilities can change with the output."""
+        self.async_update_listeners()
 
     # Reconnection
 

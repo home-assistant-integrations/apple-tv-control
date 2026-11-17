@@ -50,3 +50,7 @@ class AppleTvEntity(CoordinatorEntity[AppleTvCoordinator]):
             await command(atv)
         except PYATV_ERRORS as err:
             raise HomeAssistantError(f"Failed to {action}: {err}") from err
+        except TimeoutError as err:
+            raise HomeAssistantError(
+                f"Failed to {action}: the Apple TV did not confirm the command"
+            ) from err

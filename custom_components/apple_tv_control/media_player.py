@@ -14,6 +14,7 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -25,6 +26,21 @@ SERVICE_SELECT = "select"
 SERVICE_BACK = "back"
 ATTR_DIRECTION = "direction"
 DIRECTIONS = ["up", "down", "left", "right"]
+
+# Volume (percent) used for unmuting when the volume before muting is unknown
+DEFAULT_UNMUTE_VOLUME = 30.0
+
+SUPPORTED_FEATURES = (
+    MediaPlayerEntityFeature.TURN_ON
+    | MediaPlayerEntityFeature.TURN_OFF
+    | MediaPlayerEntityFeature.PLAY
+    | MediaPlayerEntityFeature.PAUSE
+    | MediaPlayerEntityFeature.STOP
+    | MediaPlayerEntityFeature.NEXT_TRACK
+    | MediaPlayerEntityFeature.PREVIOUS_TRACK
+    | MediaPlayerEntityFeature.SEEK
+    | MediaPlayerEntityFeature.VOLUME_STEP
+)
 
 DEVICE_STATES = {
     DeviceState.Playing: MediaPlayerState.PLAYING,
@@ -58,23 +74,18 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
     """Representation of an Apple TV media player."""
 
     _attr_name = None
-    _attr_supported_features = (
-        MediaPlayerEntityFeature.TURN_ON
-        | MediaPlayerEntityFeature.TURN_OFF
-        | MediaPlayerEntityFeature.PLAY
-        | MediaPlayerEntityFeature.PAUSE
-        | MediaPlayerEntityFeature.STOP
-        | MediaPlayerEntityFeature.NEXT_TRACK
-        | MediaPlayerEntityFeature.PREVIOUS_TRACK
-        | MediaPlayerEntityFeature.SEEK
-        | MediaPlayerEntityFeature.VOLUME_STEP
-        | MediaPlayerEntityFeature.VOLUME_MUTE
-    )
 
     def __init__(self, coordinator: AppleTvCoordinator) -> None:
         """Initialize the media player."""
         super().__init__(coordinator, "media_player")
         self._volume_before_mute: float | None = None
+
+    @property
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        """Return the features; mute needs an audio output with a volume level."""
+        if self.coordinator.can_set_volume:
+            return SUPPORTED_FEATURES | MediaPlayerEntityFeature.VOLUME_MUTE
+        return SUPPORTED_FEATURES
 
     @property
     def state(self) -> MediaPlayerState:
@@ -128,8 +139,8 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
 
     @property
     def is_volume_muted(self) -> bool:
-        """Return whether the volume is muted by this entity."""
-        return self._volume_before_mute is not None
+        """Return whether the volume is at 0 (mute is emulated via the volume)."""
+        return self.coordinator.can_set_volume and self.coordinator.data.volume == 0.0
 
     async def async_turn_on(self) -> None:
         """Turn the Apple TV on."""
@@ -186,20 +197,28 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute by setting the volume to 0 and restore it on unmute.
 
-        pyatv has no mute command, so the previous volume is remembered here.
+        The Apple TV has no mute command, so this only works when its audio
+        output has a settable volume level (see can_set_volume).
         """
+        if not self.coordinator.can_set_volume:
+            raise HomeAssistantError(
+                f"{self.coordinator.config_entry.title} cannot be muted: with its "
+                "current audio output the Apple TV only supports volume up and down"
+            )
 
         async def _set_mute(atv: AppleTV) -> None:
             if mute:
-                if self._volume_before_mute is None:
-                    self._volume_before_mute = atv.audio.volume
+                volume = atv.audio.volume
                 await atv.audio.set_volume(0.0)
-            elif self._volume_before_mute is not None:
-                await atv.audio.set_volume(self._volume_before_mute)
+                if volume > 0.0:
+                    self._volume_before_mute = volume
+            else:
+                await atv.audio.set_volume(
+                    self._volume_before_mute or DEFAULT_UNMUTE_VOLUME
+                )
                 self._volume_before_mute = None
 
         await self._async_send("mute" if mute else "unmute", _set_mute)
-        self.async_write_ha_state()
 
     async def async_navigate(self, direction: str) -> None:
         """Press a direction on the remote (service apple_tv_control.navigate)."""
