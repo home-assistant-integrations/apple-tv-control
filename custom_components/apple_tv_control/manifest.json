@@ -2,7 +2,7 @@
   "domain": "apple_tv_control",
   "name": "Apple TV Control",
   "categories": ["media_entertainment.tv_streaming"],
-  "codeowners": ["@thomas"],
+  "codeowners": ["@thbonk"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/home-assistant-integrations/apple-tv-control#readme",
