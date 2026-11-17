@@ -1,7 +1,14 @@
 navigate:
+  name: Navigate
+  description: Send a directional navigation command to the Apple TV.
+  target:
+    entity:
+      integration: apple_tv_control
+      domain: media_player
   fields:
     direction:
-      friendly_name: Direction
+      name: Direction
+      description: Direction to navigate.
       required: true
       selector:
         select:
@@ -14,30 +21,19 @@ navigate:
               value: "left"
             - label: "Right"
               value: "right"
-    entity_id:
-      friendly_name: "Entity ID"
-      required: true
-      selector:
-        entity:
-          integration: apple_tv_control
-          domain: media_player
 
 select:
-  fields:
-    entity_id:
-      friendly_name: "Select"
-      required: true
-      selector:
-        entity:
-          integration: apple_tv_control
-          domain: media_player
+  name: Select
+  description: Send the select command to the Apple TV.
+  target:
+    entity:
+      integration: apple_tv_control
+      domain: media_player
 
 back:
-  fields:
-    entity_id:
-      friendly_name: Back
-      required: true
-      selector:
-        entity:
-          integration: apple_tv_control
-          domain: media_player
+  name: Back
+  description: Send the back (menu) command to the Apple TV.
+  target:
+    entity:
+      integration: apple_tv_control
+      domain: media_player

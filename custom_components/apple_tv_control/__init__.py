@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PLATFORMS
@@ -28,15 +29,11 @@ SERVICE_NAVIGATE = "navigate"
 SERVICE_SELECT = "select"
 SERVICE_BACK = "back"
 
-# Schema for services that target an entity
-ENTITY_SERVICE_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
+# Schemas for services that target entities (entity_id/device_id/area_id)
+ENTITY_SERVICE_SCHEMA = cv.make_entity_service_schema({})
 
-# Schema for navigate service with direction
-NAVIGATE_SERVICE_SCHEMA = vol.Schema(
-    {
-        vol.Required("entity_id"): cv.entity_id,
-        vol.Required("direction"): vol.In(VALID_DIRECTIONS),
-    }
+NAVIGATE_SERVICE_SCHEMA = cv.make_entity_service_schema(
+    {vol.Required("direction"): vol.In(VALID_DIRECTIONS)}
 )
 
 
@@ -70,49 +67,45 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 def _register_services(hass: HomeAssistant) -> None:
     """Register navigation services."""
 
+    async def _async_coordinators(
+        call: ServiceCall,
+    ) -> list[tuple[str, AppleTvCoordinator]]:
+        """Resolve the service call target to connected coordinators."""
+        result = []
+        for entity_id in await async_extract_entity_ids(call):
+            coordinator = _get_coordinator_for_entity(hass, entity_id)
+            if coordinator is None or not coordinator.connected:
+                _LOGGER.warning("Apple TV not connected for entity %s", entity_id)
+                continue
+            result.append((entity_id, coordinator))
+        return result
+
     async def _async_handle_navigate(call: ServiceCall) -> None:
         """Handle the navigate service call."""
-        entity_id = call.data["entity_id"]
         direction = call.data["direction"]
-
-        coordinator = _get_coordinator_for_entity(hass, entity_id)
-        if coordinator is None or not coordinator.connected:
-            _LOGGER.warning("Apple TV not connected for entity %s", entity_id)
-            return
-
-        try:
-            remote = coordinator.remote_control
-            await getattr(remote, direction)()
-        except Exception as ex:
-            _LOGGER.error("Failed to navigate %s: %s", direction, ex)
+        for entity_id, coordinator in await _async_coordinators(call):
+            try:
+                await getattr(coordinator.remote_control, direction)()
+            except Exception as ex:
+                _LOGGER.error(
+                    "Failed to navigate %s on %s: %s", direction, entity_id, ex
+                )
 
     async def _async_handle_select(call: ServiceCall) -> None:
         """Handle the select service call."""
-        entity_id = call.data["entity_id"]
-
-        coordinator = _get_coordinator_for_entity(hass, entity_id)
-        if coordinator is None or not coordinator.connected:
-            _LOGGER.warning("Apple TV not connected for entity %s", entity_id)
-            return
-
-        try:
-            await coordinator.remote_control.select()
-        except Exception as ex:
-            _LOGGER.error("Failed to send select command: %s", ex)
+        for entity_id, coordinator in await _async_coordinators(call):
+            try:
+                await coordinator.remote_control.select()
+            except Exception as ex:
+                _LOGGER.error("Failed to send select to %s: %s", entity_id, ex)
 
     async def _async_handle_back(call: ServiceCall) -> None:
         """Handle the back service call."""
-        entity_id = call.data["entity_id"]
-
-        coordinator = _get_coordinator_for_entity(hass, entity_id)
-        if coordinator is None or not coordinator.connected:
-            _LOGGER.warning("Apple TV not connected for entity %s", entity_id)
-            return
-
-        try:
-            await coordinator.remote_control.menu()
-        except Exception as ex:
-            _LOGGER.error("Failed to send back command: %s", ex)
+        for entity_id, coordinator in await _async_coordinators(call):
+            try:
+                await coordinator.remote_control.menu()
+            except Exception as ex:
+                _LOGGER.error("Failed to send back to %s: %s", entity_id, ex)
 
     hass.services.async_register(
         DOMAIN,
