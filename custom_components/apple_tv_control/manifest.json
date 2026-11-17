@@ -6,7 +6,7 @@
   ],
   "codeowners": ["@thomas"],
   "config_flow": true,
-  "dependencies": ["pyatv>=0.18.0"],
+  "dependencies": [],
   "documentation": "https://github.com/home-assistant-integrations/apple-tv-control/docs",
   "integration_type": "hub",
   "iot_class": "local_polling",
