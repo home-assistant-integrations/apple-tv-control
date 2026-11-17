@@ -1,5 +1,7 @@
 # Apple TV Control
 
+[![Open your Home Assistant instance and search for Apple TV Control](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=home-assistant-community&repository=apple-tv-control)
+
 A Home Assistant custom integration for comprehensive Apple TV remote control. Unlike the default Home Assistant Apple TV integration, which focuses on metadata and playback state, this integration prioritizes **device control** — navigation, media playback, power management, and advanced button actions (long press).
 
 Built on [pyatv](https://pyatv.dev) for Apple TV communication.
