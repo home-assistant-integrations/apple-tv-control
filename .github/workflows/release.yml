@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # full history, needed to merge the release back
 
       - name: Calculate next version
         id: version
@@ -76,24 +78,20 @@ jobs:
             exit 1
           fi
 
-      - name: Create release branch and set manifest version
+      - name: Create release branch with changelog and version
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           git switch -c "rel-$VERSION"
 
-          # Keep manifest.json's version in sync with the release tag (HACS shows the tag, Home Assistant the manifest)
-          sed -i -E "s/^([[:space:]]*\"version\":[[:space:]]*\")[^\"]*\"/\1$VERSION\"/" "$MANIFEST"
-          jq -e --arg v "$VERSION" '.version == $v' "$MANIFEST" > /dev/null
+          # Move the [Unreleased] changelog entries into the version section and
+          # set the version in manifest.json and const.py (fails without entries)
+          python3 .github/scripts/prepare_release.py "$VERSION" "$(date -u +%Y-%m-%d)"
 
-          if git diff --quiet; then
-            echo "$MANIFEST is already at $VERSION"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "chore(release): $VERSION"
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): $VERSION"
 
       - name: Build release notes
         id: notes
@@ -143,6 +141,23 @@ jobs:
           fi
           gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
             --target "rel-$VERSION" --title "$VERSION" "${notes[@]}"
+
+      - name: Merge the release back into the default branch
+        # Empties [Unreleased] there, so the next release does not repeat these entries
+        if: ${{ !inputs.dry_run && github.ref_name == github.event.repository.default_branch }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Fast-forward only: a real merge could file changelog entries pushed
+          # to the branch during the release under the released version.
+          git fetch origin "$BASE"
+          if ! git merge-base --is-ancestor "origin/$BASE" "rel-$VERSION"; then
+            echo "::error::$BASE changed while releasing $VERSION. The release is published; merge rel-$VERSION into $BASE by hand and keep the new changelog entries under [Unreleased]."
+            exit 1
+          fi
+          git push origin "rel-$VERSION:$BASE"
 
       - name: Summary
         env:

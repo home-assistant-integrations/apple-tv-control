@@ -15,6 +15,10 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 - **README**: Update button next to the install button; it opens the update overview of Home Assistant
 - **README**: Troubleshooting entry for new releases that do not show up as updates (HACS checks custom repositories only every 48 hours)
 
+### Changed
+
+- **Release workflow**: Moves the `[Unreleased]` entries into the new version's section (used as release notes), sets the version in `manifest.json` and `const.py` on the release branch, refuses to release without changelog entries, and fast-forwards `main` to the release afterwards
+
 ## [2026.11.4] - 2026-11-17
 
 ### Added
