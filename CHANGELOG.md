@@ -10,6 +10,8 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-18
+
 ### Added
 
 - **README**: Update button next to the install button; it opens the update overview of Home Assistant

@@ -4,7 +4,7 @@ import pyatv.exceptions
 
 DOMAIN = "apple_tv_control"
 NAME = "Apple TV Control"
-VERSION = "0.1.0"
+VERSION = "2026.11.5"
 
 # Platforms to set up
 PLATFORMS = ["media_player", "button"]
