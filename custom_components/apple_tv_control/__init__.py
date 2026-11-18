@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import PLATFORMS
@@ -19,6 +20,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: AppleTvConfigEntry) -> b
 
     entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    async def _async_close(event: Event) -> None:
+        """Close the connection while Home Assistant stops.
+
+        Entries are not unloaded on stop; an open connection would be torn down
+        after the event loop closed ("Event loop is closed" at shutdown).
+        """
+        await coordinator.async_disconnect()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_close)
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
