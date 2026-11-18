@@ -91,6 +91,8 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
         self.data = AppleTvData()
         self._closing = False
         self._reconnect_task: asyncio.Task[None] | None = None
+        # The reconnect task and the regular poll can try to connect at the same time
+        self._connect_lock = asyncio.Lock()
 
     @property
     def connected(self) -> bool:
@@ -114,11 +116,18 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
             return False
 
     async def async_connect(self) -> None:
-        """Connect to the Apple TV.
+        """Connect to the Apple TV, unless connected already or closing.
 
-        Raises CannotConnect when it can't be reached and ConfigEntryAuthFailed
-        when it rejects the stored credentials.
+        Attempts run one after another, so concurrent callers never open a
+        second connection. Raises CannotConnect when it can't be reached and
+        ConfigEntryAuthFailed when it rejects the stored credentials.
         """
+        async with self._connect_lock:
+            if self.atv is None and not self._closing:
+                await self._async_connect()
+
+    async def _async_connect(self) -> None:
+        """Scan, connect and start listening for updates."""
         host = self.config_entry.data[CONF_HOST]
         try:
             config = await async_scan_host(self.hass, host)
@@ -143,18 +152,22 @@ class AppleTvCoordinator(DataUpdateCoordinator[AppleTvData]):
         except (*PYATV_ERRORS, OSError) as err:
             raise CannotConnect(f"Connecting to {host} failed: {err}") from err
 
+        if self._closing:
+            # Unloaded or Home Assistant stopped while connecting
+            await asyncio.gather(*atv.close(), return_exceptions=True)
+            return
+
         atv.listener = self
         atv.power.listener = self
         atv.audio.listener = self
         atv.push_updater.listener = self
         atv.push_updater.start()
-        self._closing = False
         self.atv = atv
         await self._async_fetch_state()
         _LOGGER.debug("Connected to %s at %s", self.config_entry.title, host)
 
     async def async_disconnect(self) -> None:
-        """Close the connection for good (entry unload)."""
+        """Close the connection for good (entry unload, Home Assistant stop)."""
         self._closing = True
         if self._reconnect_task is not None:
             self._reconnect_task.cancel()
