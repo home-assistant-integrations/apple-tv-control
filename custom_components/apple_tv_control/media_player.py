@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pyatv.const import DeviceState, PowerState
-from pyatv.interface import AppleTV
+from pyatv.const import DeviceState, PowerState, Protocol
+from pyatv.interface import AppleTV, RemoteControl
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
@@ -51,6 +51,21 @@ DEVICE_STATES = {
     DeviceState.Stopped: MediaPlayerState.IDLE,
     DeviceState.Idle: MediaPlayerState.IDLE,
 }
+
+
+def _remote_buttons(atv: AppleTV) -> RemoteControl | None:
+    """Return the remote control that presses buttons like the Siri Remote does.
+
+    pyatv sends play and play/pause as MRP commands, which some apps ignore
+    (waipu.tv does not resume on play). The Companion protocol presses the
+    remote's play/pause button instead, like the remote in Control Center.
+    pyatv prefers MRP, so the Companion remote control is taken from its
+    facade; None when there is no Companion connection.
+    """
+    get_protocol = getattr(atv.remote_control, "get", None)
+    if not callable(get_protocol):
+        return None
+    return get_protocol(Protocol.Companion)
 
 
 async def async_setup_entry(
@@ -153,17 +168,29 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
         await self._async_send("turn off", lambda atv: atv.power.turn_off())
 
     async def async_media_play(self) -> None:
-        """Send play."""
-        await self._async_send("play", lambda atv: atv.remote_control.play())
+        """Send play; resume paused media with the remote's play/pause button.
+
+        The button toggles, so it is only pressed when the media is paused.
+        """
+        paused = self.state is MediaPlayerState.PAUSED
+
+        async def _play(atv: AppleTV) -> None:
+            if paused and (buttons := _remote_buttons(atv)) is not None:
+                await buttons.play_pause()
+            else:
+                await atv.remote_control.play()
+
+        await self._async_send("play", _play)
 
     async def async_media_pause(self) -> None:
         """Send pause."""
         await self._async_send("pause", lambda atv: atv.remote_control.pause())
 
     async def async_media_play_pause(self) -> None:
-        """Toggle play/pause."""
+        """Press the remote's play/pause button."""
         await self._async_send(
-            "toggle play/pause", lambda atv: atv.remote_control.play_pause()
+            "toggle play/pause",
+            lambda atv: (_remote_buttons(atv) or atv.remote_control).play_pause(),
         )
 
     async def async_media_stop(self) -> None:
