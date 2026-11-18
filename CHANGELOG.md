@@ -13,6 +13,7 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 ### Fixed
 
 - Play did not resume paused media in apps that ignore the play command (e.g. waipu.tv); play now resumes paused media by pressing the remote's play/pause button, like the Siri Remote, and the play/pause action presses that button too
+- "Task exception was never retrieved" errors (`Connect call failed`, errno 113) every reconnect attempt while the Apple TV is off: scanning now uses Home Assistant's zeroconf instance instead of pyatv's port knocking
 
 ## [2026.11.5] - 2026-11-18
 

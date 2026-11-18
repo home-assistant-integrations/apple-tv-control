@@ -12,6 +12,7 @@ from pyatv import exceptions
 from pyatv.const import FeatureName, FeatureState, PowerState, Protocol
 from pyatv.interface import AppleTV, BaseConfig, OutputDevice, Playing, PushUpdater
 
+from homeassistant.components import zeroconf
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -45,8 +46,15 @@ class CannotConnect(Exception):
 
 
 async def async_scan_host(hass: HomeAssistant, host: str) -> BaseConfig | None:
-    """Scan one host and return its pyatv configuration, or None if nothing answered."""
-    devices = await pyatv.scan(hass.loop, hosts=[host])
+    """Scan one host and return its pyatv configuration, or None if nothing answered.
+
+    Uses Home Assistant's zeroconf instance. Without it pyatv knocks on the
+    device's ports first and, when the host is unreachable (Apple TV off),
+    leaves the failed knocks behind as "Task exception was never retrieved"
+    errors in the log.
+    """
+    aiozc = await zeroconf.async_get_async_instance(hass)
+    devices = await pyatv.scan(hass.loop, hosts=[host], aiozc=aiozc)
     return devices[0] if devices else None
 
 
