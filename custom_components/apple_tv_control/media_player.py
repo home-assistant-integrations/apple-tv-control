@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 
 from pyatv.const import DeviceState, PowerState, Protocol
 from pyatv.interface import AppleTV, RemoteControl
@@ -30,6 +31,12 @@ DIRECTIONS = ["up", "down", "left", "right"]
 
 # Volume (percent) used for unmuting when the volume before muting is unknown
 DEFAULT_UNMUTE_VOLUME = 30.0
+
+_LOGGER = logging.getLogger(__name__)
+
+# States in which play presses the remote's play/pause button. pyatv reports a
+# paused app without content metadata (e.g. live TV in waipu.tv) as idle.
+RESUME_WITH_BUTTON = (MediaPlayerState.PAUSED, MediaPlayerState.IDLE)
 
 SUPPORTED_FEATURES = (
     MediaPlayerEntityFeature.TURN_ON
@@ -168,16 +175,19 @@ class AppleTvMediaPlayer(AppleTvEntity, MediaPlayerEntity):
         await self._async_send("turn off", lambda atv: atv.power.turn_off())
 
     async def async_media_play(self) -> None:
-        """Send play; resume paused media with the remote's play/pause button.
+        """Resume with the remote's play/pause button, or send play.
 
-        The button toggles, so it is only pressed when the media is paused.
+        The button toggles, so it is only pressed when nothing is playing.
         """
-        paused = self.state is MediaPlayerState.PAUSED
+        state = self.state
+        use_button = state in RESUME_WITH_BUTTON
 
         async def _play(atv: AppleTV) -> None:
-            if paused and (buttons := _remote_buttons(atv)) is not None:
+            if use_button and (buttons := _remote_buttons(atv)) is not None:
+                _LOGGER.debug("Play (state %s): pressing the remote's play/pause button", state)
                 await buttons.play_pause()
             else:
+                _LOGGER.debug("Play (state %s): sending play", state)
                 await atv.remote_control.play()
 
         await self._async_send("play", _play)

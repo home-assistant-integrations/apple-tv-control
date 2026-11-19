@@ -10,6 +10,10 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 
 ## [Unreleased]
 
+### Fixed
+
+- Play still did nothing after pausing waipu.tv: pyatv reports a paused app without content metadata (live TV) as idle, and only paused media was resumed with the remote's play/pause button; play now presses that button whenever nothing is playing
+
 ## [2026.11.6] - 2026-11-19
 
 ### Fixed
