@@ -10,6 +10,8 @@ Versioning follows the calendar-based pattern **yyyy.mm.rm**, where:
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-19
+
 ### Fixed
 
 - Play did not resume paused media in apps that ignore the play command (e.g. waipu.tv); play now resumes paused media by pressing the remote's play/pause button, like the Siri Remote, and the play/pause action presses that button too
